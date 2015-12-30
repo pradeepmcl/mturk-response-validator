@@ -1,0 +1,16 @@
+# Eclipse specific directories
+bin/
+gen/
+
+# Maven specific directories
+target/
+
+# Sensitive files
+#src/main/resources/application.properties
+#mturk.properties
+
+# Mac specific file
+.DS_Store
+
+# Other directories
+data/
