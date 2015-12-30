@@ -6,8 +6,8 @@ gen/
 target/
 
 # Sensitive files
-#src/main/resources/application.properties
-#mturk.properties
+src/main/resources/application.properties
+mturk.properties
 
 # Mac specific file
 .DS_Store
