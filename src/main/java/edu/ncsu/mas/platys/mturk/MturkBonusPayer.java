@@ -2,6 +2,7 @@ package edu.ncsu.mas.platys.mturk;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
+import java.io.FileReader;
 import java.io.IOException;
 import java.io.InputStream;
 import java.sql.Connection;
@@ -9,7 +10,6 @@ import java.sql.DriverManager;
 import java.sql.PreparedStatement;
 import java.sql.ResultSet;
 import java.sql.SQLException;
-import java.sql.Statement;
 import java.util.Collection;
 import java.util.HashMap;
 import java.util.Map;
@@ -17,6 +17,7 @@ import java.util.Properties;
 
 import com.amazonaws.mturk.service.axis.RequesterService;
 import com.amazonaws.mturk.util.PropertiesClientConfig;
+import com.opencsv.CSVReader;
 
 public class MturkBonusPayer implements AutoCloseable {
 
@@ -44,23 +45,42 @@ public class MturkBonusPayer implements AutoCloseable {
 
   private void grantBonus(String workerId, Double bonusAmount, String assignmentId,
       String bonusReason) {
-    mturkRequesterService.grantBonus(workerId, bonusAmount, assignmentId, bonusReason);
+    //mturkRequesterService.grantBonus(workerId, bonusAmount, assignmentId, bonusReason);
+    System.out.println("Paying " + workerId);
   }
 
   private Map<String, Integer> getUserDetailsFromDb(int createdPhase) throws SQLException {
     Map<String, Integer> userIdToBonusAmount = new HashMap<>();
 
     String bonusUserQuery = "select mturk_id, bonus_amount from users_bonus"
-        + " where bonus_type = 1 and created_phase = " + createdPhase;
+        + " where bonus_type = 1 and created_phase = ?";
 
-    try (Statement stmt = mDbConn.createStatement();
-        ResultSet rs = stmt.executeQuery(bonusUserQuery)) {
-      while (rs.next()) {
-        userIdToBonusAmount.put(rs.getString(1), rs.getInt(2));
+    try (PreparedStatement pStmt = mDbConn.prepareStatement(bonusUserQuery)) {
+      pStmt.setInt(1, createdPhase);
+      try (ResultSet rs = pStmt.executeQuery()) {
+        while (rs.next()) {
+          userIdToBonusAmount.put(rs.getString(1), rs.getInt(2));
+        }
       }
     }
 
     return userIdToBonusAmount;
+  }
+
+  private Map<String, String> getAssignmentIdsFromResultsFile() throws FileNotFoundException,
+      IOException {
+    Map<String, String> userIdToAssignmentId = new HashMap<>();
+    try (CSVReader reader = new CSVReader(
+        new FileReader(props.getProperty("mturk.resultsFilename")))) {
+      reader.readNext(); // Ignore first line
+      String[] line;
+      while ((line = reader.readNext()) != null) {
+        String workerkId = line[15].trim();
+        String AssignmentId = line[14].trim();
+        userIdToAssignmentId.put(workerkId, AssignmentId);
+      }
+    }
+    return userIdToAssignmentId;
   }
 
   // TODO: Not efficient to run an update for each payment
@@ -83,10 +103,11 @@ public class MturkBonusPayer implements AutoCloseable {
   public static void main(String[] args) throws Exception {
 
     int createdPhase = Integer.parseInt(args[0]);
-    String hitId = args[1];
-    String bonusReason = args[2];
+    String bonusReason = args[1];
 
     try (MturkBonusPayer bonusPayer = new MturkBonusPayer()) {
+
+      Map<String, String> userIdToAssignmentId = bonusPayer.getAssignmentIdsFromResultsFile();
 
       Map<String, Integer> userIdToBonusAmount = bonusPayer.getUserDetailsFromDb(createdPhase);
       System.out.println("Number of turkers to pay bonus: " + userIdToBonusAmount.size());
@@ -99,8 +120,8 @@ public class MturkBonusPayer implements AutoCloseable {
 
       if (balance > (1.2 * totalBonus)) { // 20% Amazon fee
         for (String workerId : userIdToBonusAmount.keySet()) {
-          bonusPayer.grantBonus(workerId, userIdToBonusAmount.get(workerId).doubleValue(), hitId,
-              bonusReason);
+          bonusPayer.grantBonus(workerId, userIdToBonusAmount.get(workerId).doubleValue(),
+              userIdToAssignmentId.get(workerId), bonusReason);
           bonusPayer.updatePaymentInDb(workerId);
           System.out.println(workerId + ": " + userIdToBonusAmount.get(workerId));
         }
