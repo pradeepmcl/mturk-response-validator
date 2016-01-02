@@ -45,8 +45,8 @@ public class MturkBonusPayer implements AutoCloseable {
 
   private void grantBonus(String workerId, Double bonusAmount, String assignmentId,
       String bonusReason) {
-    //mturkRequesterService.grantBonus(workerId, bonusAmount, assignmentId, bonusReason);
-    System.out.println("Paying " + workerId);
+    mturkRequesterService.grantBonus(workerId, bonusAmount, assignmentId, bonusReason);
+    // System.out.println("Paying " + workerId);
   }
 
   private Map<String, Integer> getUserDetailsFromDb(int createdPhase) throws SQLException {
@@ -120,10 +120,13 @@ public class MturkBonusPayer implements AutoCloseable {
 
       if (balance > (1.2 * totalBonus)) { // 20% Amazon fee
         for (String workerId : userIdToBonusAmount.keySet()) {
-          bonusPayer.grantBonus(workerId, userIdToBonusAmount.get(workerId).doubleValue(),
-              userIdToAssignmentId.get(workerId), bonusReason);
-          bonusPayer.updatePaymentInDb(workerId);
-          System.out.println(workerId + ": " + userIdToBonusAmount.get(workerId));
+          String assignmentId = userIdToAssignmentId.get(workerId);
+          Double bounsAmount = userIdToBonusAmount.get(workerId).doubleValue();
+          if (assignmentId != null && bounsAmount > 0) {
+            bonusPayer.grantBonus(workerId, bounsAmount, assignmentId, bonusReason);
+            bonusPayer.updatePaymentInDb(workerId);
+            System.out.println(workerId + ": " + userIdToBonusAmount.get(workerId));
+          }
         }
         System.out.println("Successfully paid all bonuses");
         System.out.println("Account balance: "
