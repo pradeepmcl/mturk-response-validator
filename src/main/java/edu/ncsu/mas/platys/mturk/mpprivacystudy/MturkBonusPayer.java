@@ -1,4 +1,4 @@
-package edu.ncsu.mas.platys.mturk;
+package edu.ncsu.mas.platys.mturk.mpprivacystudy;
 
 import java.io.FileInputStream;
 import java.io.FileNotFoundException;
